@@ -69,6 +69,7 @@ class EfficientZeroAgent:
         self.network = MiniNetwork(hidden_size=hidden_size).to(self.device)
         self.optimizer = optim.Adam(self.network.parameters(), lr=1e-3)
         self.training_steps = 0
+        self.elo = 1000.0
 
     def select_action(self, env: TicTacToe, player: int, simulations: int = 50) -> Tuple[int, List[float]]:
         obs = torch.from_numpy(env.observation(player)).float().to(self.device)
@@ -141,16 +142,27 @@ class EfficientZeroAgent:
         value_score = child.value()
         return prior_score + value_score
 
-    def self_play(self, num_games: int = 20, simulations: int = 50) -> List[Dict]:
+    def self_play(self, num_games: int = 20, simulations: int = 50) -> Tuple[List[Dict], List[Dict], Dict[str, int]]:
         dataset: List[Dict] = []
+        replays: List[Dict] = []
+        outcomes = {"wins": 0, "losses": 0, "draws": 0}
+
         for _ in range(num_games):
             env = TicTacToe()
             player = 1
             game_history: List[Dict] = []
+            moves: List[Dict] = []
             while True:
+                observation = env.observation(player)
                 action, visit_probs = self.select_action(env, player, simulations=simulations)
+                moves.append({
+                    "player": player,
+                    "board": env.board.astype(int).tolist(),
+                    "action": action,
+                    "policy": visit_probs,
+                })
                 game_history.append({
-                    "observation": env.observation(player),
+                    "observation": observation,
                     "player": player,
                     "action_probs": visit_probs,
                 })
@@ -164,9 +176,16 @@ class EfficientZeroAgent:
                             "policy_target": np.array(item["action_probs"], dtype=np.float32),
                             "value_target": float(value),
                         })
+                    if winner == 1:
+                        outcomes["wins"] += 1
+                    elif winner == -1:
+                        outcomes["losses"] += 1
+                    else:
+                        outcomes["draws"] += 1
+                    replays.append({"moves": moves, "winner": int(winner)})
                     break
                 player = TicTacToe.opponent(player)
-        return dataset
+        return dataset, replays, outcomes
 
     def train_step(self, batch: List[Dict]):
         obs_batch = torch.tensor(np.stack([b["observation"] for b in batch]), dtype=torch.float32, device=self.device)
@@ -189,19 +208,35 @@ class EfficientZeroAgent:
         }
 
     def train_self_play(self, num_games: int = 10, simulations: int = 40, batch_size: int = 32) -> Dict:
-        dataset = self.self_play(num_games=num_games, simulations=simulations)
+        dataset, replays, outcomes = self.self_play(num_games=num_games, simulations=simulations)
         random.shuffle(dataset)
         metrics = []
         for i in range(0, len(dataset), batch_size):
             batch = dataset[i:i + batch_size]
             metrics.append(self.train_step(batch))
         avg_loss = sum(m["loss"] for m in metrics) / max(1, len(metrics))
+        elo_before = self.elo
+        self._update_elo(outcomes)
         return {
             "games": num_games,
             "samples": len(dataset),
             "avg_loss": avg_loss,
             "steps": self.training_steps,
+            "wins": outcomes["wins"],
+            "losses": outcomes["losses"],
+            "draws": outcomes["draws"],
+            "elo": self.elo,
+            "elo_change": self.elo - elo_before,
+            "replays": replays,
         }
+
+    def _update_elo(self, outcomes: Dict[str, int], k: float = 24.0):
+        total = outcomes["wins"] + outcomes["losses"] + outcomes["draws"]
+        if total == 0:
+            return
+        score = (outcomes["wins"] + 0.5 * outcomes["draws"]) / total
+        expected = 0.5  # self-play baseline
+        self.elo += k * (score - expected)
 
     def to_cpu(self):
         self.network.to("cpu")
