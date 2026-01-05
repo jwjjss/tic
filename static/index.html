@@ -23,6 +23,7 @@
       <div class="status-panel">
         <h2>状态</h2>
         <div id="status">加载中...</div>
+        <div class="elo" id="elo-display">ELO: --</div>
       </div>
     </section>
 
@@ -34,6 +35,20 @@
         <button id="agent-move">让 AI 走一步</button>
         <div id="message"></div>
       </div>
+    </section>
+
+    <section class="replay-section">
+      <h2>自博弈回放</h2>
+      <div class="replay-controls">
+        <label>
+          选择对局：
+          <select id="replay-select"></select>
+        </label>
+        <button id="replay-play">播放回放</button>
+        <button id="replay-stop">停止</button>
+        <span id="replay-meta"></span>
+      </div>
+      <div class="board replay-board" id="replay-board"></div>
     </section>
   </div>
 
