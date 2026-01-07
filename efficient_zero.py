@@ -126,9 +126,10 @@ class EfficientZeroAgent:
             for action, p in enumerate(policy):
                 if env.board[action] == 0:
                     node.children[action] = Node(prior=float(p))
-            leaf_value = float(value.item())
+            rollout_winner = self._rollout(env.clone(), current_player)
+            leaf_value = float(rollout_winner * current_player)
         else:
-            leaf_value = float(winner)
+            leaf_value = float(winner * current_player)
 
         # Backpropagate
         for step, node in enumerate(reversed(search_path)):
@@ -143,6 +144,17 @@ class EfficientZeroAgent:
         prior_score = pb_c * child.prior
         value_score = child.value()
         return prior_score + value_score
+
+    @staticmethod
+    def _rollout(env: TicTacToe, current_player: int) -> int:
+        winner = env.check_winner()
+        player = current_player
+        while winner is None:
+            action = random.choice(env.legal_actions())
+            env.apply_action(action, player)
+            winner = env.check_winner()
+            player = TicTacToe.opponent(player)
+        return int(winner)
 
     def self_play(self, num_games: int = 20, simulations: int = 50) -> Tuple[List[Dict], List[Dict], Dict[str, int]]:
         dataset: List[Dict] = []
