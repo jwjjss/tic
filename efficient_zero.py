@@ -69,7 +69,7 @@ class EfficientZeroAgent:
     def __init__(self, device: str | torch.device = "cpu", hidden_size: int = 64):
         self.device = torch.device(device)
         self.network = MiniNetwork(hidden_size=hidden_size).to(self.device)
-        self.optimizer = optim.Adam(self.network.parameters(), lr=1e-3)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=3e-4, weight_decay=1e-5)
         self.training_steps = 0
         self.elo = 1000.0
 
@@ -249,11 +249,12 @@ class EfficientZeroAgent:
 
         value, reward, policy_logits, _ = self.network.initial_inference(obs_batch)
         policy_loss = -(policy_targets * torch.log_softmax(policy_logits, dim=-1)).sum(dim=1).mean()
-        value_loss = nn.functional.mse_loss(value, value_targets)
-        loss = policy_loss + value_loss
+        value_loss = nn.functional.smooth_l1_loss(value, value_targets)
+        loss = policy_loss + 0.5 * value_loss
 
         self.optimizer.zero_grad()
         loss.backward()
+        nn.utils.clip_grad_norm_(self.network.parameters(), max_norm=1.0)
         self.optimizer.step()
         self.training_steps += 1
         return {
