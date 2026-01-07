@@ -64,6 +64,8 @@ class EfficientZeroAgent:
     repeated self-play games followed by policy/value learning.
     """
 
+    MINIMAX_ELO = 1200.0
+
     def __init__(self, device: str | torch.device = "cpu", hidden_size: int = 64):
         self.device = torch.device(device)
         self.network = MiniNetwork(hidden_size=hidden_size).to(self.device)
@@ -187,6 +189,59 @@ class EfficientZeroAgent:
                 player = TicTacToe.opponent(player)
         return dataset, replays, outcomes
 
+    def _minimax(self, env: TicTacToe, player: int, alpha: float = -float("inf"), beta: float = float("inf")) -> float:
+        winner = env.check_winner()
+        if winner is not None:
+            return float(winner * player)
+        best_score = -float("inf")
+        for action in env.legal_actions():
+            next_env = env.clone()
+            next_env.apply_action(action, player)
+            score = -self._minimax(next_env, TicTacToe.opponent(player), -beta, -alpha)
+            best_score = max(best_score, score)
+            alpha = max(alpha, score)
+            if alpha >= beta:
+                break
+        return best_score
+
+    def _minimax_action(self, env: TicTacToe, player: int) -> int:
+        best_score = -float("inf")
+        best_actions: List[int] = []
+        for action in env.legal_actions():
+            next_env = env.clone()
+            next_env.apply_action(action, player)
+            score = -self._minimax(next_env, TicTacToe.opponent(player))
+            if score > best_score:
+                best_score = score
+                best_actions = [action]
+            elif score == best_score:
+                best_actions.append(action)
+        return random.choice(best_actions)
+
+    def evaluate_vs_minimax(self, num_games: int = 10, simulations: int = 50) -> Dict[str, int]:
+        outcomes = {"wins": 0, "losses": 0, "draws": 0}
+        for game_index in range(num_games):
+            env = TicTacToe()
+            agent_player = 1 if game_index % 2 == 0 else -1
+            current_player = 1
+            while True:
+                if current_player == agent_player:
+                    action, _ = self.select_action(env, current_player, simulations=simulations)
+                else:
+                    action = self._minimax_action(env, current_player)
+                env.apply_action(action, current_player)
+                winner = env.check_winner()
+                if winner is not None:
+                    if winner == agent_player:
+                        outcomes["wins"] += 1
+                    elif winner == 0:
+                        outcomes["draws"] += 1
+                    else:
+                        outcomes["losses"] += 1
+                    break
+                current_player = TicTacToe.opponent(current_player)
+        return outcomes
+
     def train_step(self, batch: List[Dict]):
         obs_batch = torch.tensor(np.stack([b["observation"] for b in batch]), dtype=torch.float32, device=self.device)
         policy_targets = torch.tensor(np.stack([b["policy_target"] for b in batch]), dtype=torch.float32, device=self.device)
@@ -216,7 +271,8 @@ class EfficientZeroAgent:
             metrics.append(self.train_step(batch))
         avg_loss = sum(m["loss"] for m in metrics) / max(1, len(metrics))
         elo_before = self.elo
-        self._update_elo(outcomes)
+        eval_outcomes = self.evaluate_vs_minimax(num_games=max(4, num_games // 2), simulations=simulations)
+        self._update_elo(eval_outcomes)
         return {
             "games": num_games,
             "samples": len(dataset),
@@ -225,6 +281,9 @@ class EfficientZeroAgent:
             "wins": outcomes["wins"],
             "losses": outcomes["losses"],
             "draws": outcomes["draws"],
+            "eval_wins": eval_outcomes["wins"],
+            "eval_losses": eval_outcomes["losses"],
+            "eval_draws": eval_outcomes["draws"],
             "elo": self.elo,
             "elo_change": self.elo - elo_before,
             "replays": replays,
@@ -235,7 +294,7 @@ class EfficientZeroAgent:
         if total == 0:
             return
         score = (outcomes["wins"] + 0.5 * outcomes["draws"]) / total
-        expected = 0.5  # self-play baseline
+        expected = 1.0 / (1.0 + 10 ** ((self.MINIMAX_ELO - self.elo) / 400.0))
         self.elo += k * (score - expected)
 
     def to_cpu(self):
