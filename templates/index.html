@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tic-Tac-Toe RL + MCTS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Tic-Tac-Toe RL Lab</h1>
+      <p>Self-play training with MCTS and a policy/value network.</p>
+    </header>
+    <main>
+      <section class="card">
+        <h2>Play vs AI</h2>
+        <div class="control-bar">
+          <div class="select-wrap">
+            <label for="game-select">Game</label>
+            <select id="game-select" class="select">
+              <option value="tictactoe">Tic-Tac-Toe</option>
+              <option value="go5">Go 5x5</option>
+              <option value="chess5">Chess 5x5</option>
+            </select>
+          </div>
+          <button id="restart">New Game</button>
+        </div>
+        <div class="status" id="status"></div>
+        <div class="board" id="board"></div>
+        <p class="note" id="note"></p>
+      </section>
+      <section class="card">
+        <h2>Training Metrics</h2>
+        <div class="chart">
+          <h3>Win Rate</h3>
+          <img data-src="/artifacts/win_rate_curve.png" src="/artifacts/win_rate_curve.png" alt="Win rate" />
+        </div>
+        <div class="chart">
+          <h3>Elo</h3>
+          <img data-src="/artifacts/elo_curve.png" src="/artifacts/elo_curve.png" alt="Elo" />
+        </div>
+        <div class="actions">
+          <button class="secondary" id="refresh-charts">Refresh charts</button>
+        </div>
+        <p class="note">Run training to generate charts in artifacts/.</p>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
