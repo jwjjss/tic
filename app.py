@@ -41,7 +41,7 @@ def set_game(game_name):
 
 
 with STATE_LOCK:
-    set_game(os.environ.get("GAME_NAME", "tictactoe"))
+    set_game(os.environ.get("GAME_NAME", "chess5"))
 
 
 @app.route("/")

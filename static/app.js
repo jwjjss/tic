@@ -16,6 +16,20 @@ let moveCount = 0;
 let maxMoves = 0;
 let cells = [];
 
+function isChessGame() {
+  return gameName === "chess5";
+}
+
+function displayIndexToBoardIndex(displayIndex) {
+  if (!isChessGame()) {
+    return displayIndex;
+  }
+  const row = Math.floor(displayIndex / gridSize);
+  const col = displayIndex % gridSize;
+  const boardRow = gridSize - 1 - row;
+  return boardRow * gridSize + col;
+}
+
 function setStatus(text) {
   statusEl.textContent = text;
 }
@@ -24,37 +38,53 @@ function pieceChar(value) {
   if (value === 0) return "";
   if (gameName === "tictactoe") return value === 1 ? "X" : "O";
   if (gameName === "go5") return value === 1 ? "B" : "W";
-  const map = { 1: "P", 2: "N", 3: "B", 4: "R", 5: "Q", 6: "K" };
-  const base = map[Math.abs(value)] || "?";
-  return value > 0 ? base : base.toLowerCase();
+  if (gameName === "chess5") {
+    const white = { 1: "♙", 2: "♘", 3: "♗", 4: "♖", 5: "♕", 6: "♔" };
+    const black = { 1: "♟", 2: "♞", 3: "♝", 4: "♜", 5: "♛", 6: "♚" };
+    const base = Math.abs(value);
+    return value > 0 ? white[base] || "?" : black[base] || "?";
+  }
+  return "?";
 }
 
 function buildBoard() {
   boardEl.innerHTML = "";
   boardEl.style.setProperty("--grid-size", gridSize);
+  boardEl.dataset.game = gameName;
+  boardEl.classList.toggle("board--chess", isChessGame());
   cells = [];
-  board.forEach((_, idx) => {
+  for (let displayIndex = 0; displayIndex < board.length; displayIndex += 1) {
     const cell = document.createElement("div");
     cell.className = "cell";
-    cell.dataset.index = String(idx);
+    const row = Math.floor(displayIndex / gridSize);
+    const col = displayIndex % gridSize;
+    const boardIndex = displayIndexToBoardIndex(displayIndex);
+    cell.dataset.index = String(boardIndex);
+    if (isChessGame()) {
+      cell.classList.add("cell--chess");
+      cell.classList.toggle("cell--dark", (row + col) % 2 === 0);
+      cell.classList.toggle("cell--light", (row + col) % 2 === 1);
+    }
     cell.addEventListener("click", handleCellClick);
     boardEl.appendChild(cell);
     cells.push(cell);
-  });
+  }
 }
 
 function renderBoard() {
-  if (cells.length !== board.length) {
+  if (cells.length !== board.length || boardEl.dataset.game !== gameName) {
     buildBoard();
   }
-  cells.forEach((cell, idx) => {
-    const value = board[idx];
+  cells.forEach((cell) => {
+    const boardIndex = Number(cell.dataset.index);
+    const value = board[boardIndex];
     cell.textContent = pieceChar(value);
     cell.classList.toggle("is-x", gameName === "tictactoe" && value === 1);
     cell.classList.toggle("is-o", gameName === "tictactoe" && value === -1);
     cell.classList.toggle("is-pos", gameName !== "tictactoe" && value > 0);
     cell.classList.toggle("is-neg", gameName !== "tictactoe" && value < 0);
-    cell.classList.toggle("selected", idx === selectedIndex);
+    cell.classList.toggle("selected", boardIndex === selectedIndex);
+    cell.classList.toggle("has-piece", value !== 0);
   });
 }
 
@@ -167,6 +197,7 @@ async function loadGameConfig(nextGame = null) {
   if (gameSelect.value !== gameName) {
     gameSelect.value = gameName;
   }
+  document.body.classList.toggle("game-chess", isChessGame());
   updateNote();
   renderBoard();
   setStatus("Your move.");
