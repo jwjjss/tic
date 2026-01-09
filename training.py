@@ -4,6 +4,7 @@ import argparse
 import csv
 import math
 import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import random
 
 import matplotlib.pyplot as plt
